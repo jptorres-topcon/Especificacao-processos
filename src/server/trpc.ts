@@ -6,7 +6,10 @@ import { ZodError } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function createTRPCContext(_opts: FetchCreateContextFnOptions) {
+export async function createTRPCContext(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _opts: FetchCreateContextFnOptions
+) {
   const session = await getServerSession(authOptions);
   return { session, prisma };
 }
