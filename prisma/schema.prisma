@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  CONSULTANT
+  VIEWER
+}
+
+enum ClientSize {
+  PP
+  PM
+  PG
+}
+
+enum SessionStatus {
+  DRAFT
+  IN_PROGRESS
+  FINALIZED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  role      Role     @default(VIEWER)
+  createdAt DateTime @default(now())
+
+  accounts             Account[]
+  authSessions         AuthSession[]
+  clientsCreated       Client[]      @relation("ClientCreatedBy")
+  specSessionsCreated  SpecSession[] @relation("SpecSessionCreatedBy")
+  specSessionsFinalized SpecSession[] @relation("SpecSessionFinalizedBy")
+  answers              Answer[]
+  auditLogs            AuditLog[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model AuthSession {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Client {
+  id          String     @id @default(cuid())
+  name        String
+  cnpj        String     @unique
+  size        ClientSize
+  createdById String
+  createdAt   DateTime   @default(now())
+
+  createdBy    User          @relation("ClientCreatedBy", fields: [createdById], references: [id])
+  specSessions SpecSession[]
+}
+
+model Question {
+  id             String   @id @default(cuid())
+  area           String
+  subArea        String?
+  module         String?
+  order          Int
+  text           String
+  suggestedParam String?
+  activePP       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  answers Answer[]
+
+  @@index([area, order])
+}
+
+model SpecSession {
+  id            String        @id @default(cuid())
+  clientId      String
+  createdById   String
+  finalizedById String?
+  status        SessionStatus @default(DRAFT)
+  startedAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  finalizedAt   DateTime?
+
+  client      Client   @relation(fields: [clientId], references: [id])
+  createdBy   User     @relation("SpecSessionCreatedBy", fields: [createdById], references: [id])
+  finalizedBy User?    @relation("SpecSessionFinalizedBy", fields: [finalizedById], references: [id])
+  answers     Answer[]
+}
+
+model Answer {
+  id               String   @id @default(cuid())
+  sessionId        String
+  questionId       String
+  asIs             String?
+  toBe             String?
+  parameters       String?
+  observations     String?
+  aiSuggestionUsed Boolean  @default(false)
+  answeredById     String
+  answeredAt       DateTime @default(now())
+
+  session    SpecSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question   Question    @relation(fields: [questionId], references: [id])
+  answeredBy User        @relation(fields: [answeredById], references: [id])
+
+  @@unique([sessionId, questionId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+}
