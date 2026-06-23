@@ -1,26 +1,8 @@
 import { NextAuthOptions } from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import { prisma } from "./prisma";
-
-const ALLOWED_DOMAIN = "topconsuite.com";
 
 export const authOptions: NextAuthOptions = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  adapter: PrismaAdapter(prisma) as any,
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          hd: ALLOWED_DOMAIN,
-          prompt: "consent",
-          access_type: "offline",
-        },
-      },
-    }),
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -44,27 +26,11 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ user }) {
-      if (!user.email?.endsWith(`@${ALLOWED_DOMAIN}`)) {
-        return false;
-      }
-      return true;
-    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const userRole = (user as any).role as string | undefined;
-        if (userRole) {
-          token.role = userRole as "ADMIN" | "CONSULTANT" | "VIEWER";
-        } else {
-          const dbUser = await prisma.user.findUnique({
-            where: { email: user.email! },
-            select: { id: true, role: true },
-          });
-          token.id = dbUser?.id ?? user.id;
-          token.role = (dbUser?.role as "ADMIN" | "CONSULTANT" | "VIEWER") ?? "VIEWER";
-        }
+        token.role = ((user as any).role ?? "VIEWER") as "ADMIN" | "CONSULTANT" | "VIEWER";
       }
       return token;
     },
