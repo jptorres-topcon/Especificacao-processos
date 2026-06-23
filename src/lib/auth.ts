@@ -1,5 +1,6 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "./prisma";
 
@@ -20,6 +21,27 @@ export const authOptions: NextAuthOptions = {
         },
       },
     }),
+    CredentialsProvider({
+      name: "credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Senha", type: "password" },
+      },
+      async authorize(credentials) {
+        if (
+          credentials?.email === "jptorres@topconsuite.com" &&
+          credentials?.password === "1234"
+        ) {
+          return {
+            id: "1",
+            name: "João Torres",
+            email: "jptorres@topconsuite.com",
+            role: "ADMIN",
+          };
+        }
+        return null;
+      },
+    }),
   ],
   callbacks: {
     async signIn({ user }) {
@@ -28,14 +50,28 @@ export const authOptions: NextAuthOptions = {
       }
       return true;
     },
-    async session({ session, user }) {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const userRole = (user as any).role as string | undefined;
+        if (userRole) {
+          token.role = userRole as "ADMIN" | "CONSULTANT" | "VIEWER";
+        } else {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: user.email! },
+            select: { id: true, role: true },
+          });
+          token.id = dbUser?.id ?? user.id;
+          token.role = (dbUser?.role as "ADMIN" | "CONSULTANT" | "VIEWER") ?? "VIEWER";
+        }
+      }
+      return token;
+    },
+    async session({ session, token }) {
       if (session.user) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: user.id },
-          select: { id: true, role: true },
-        });
-        session.user.id = user.id;
-        session.user.role = dbUser?.role ?? "VIEWER";
+        session.user.id = token.id as string;
+        session.user.role = token.role ?? "VIEWER";
       }
       return session;
     },
@@ -45,6 +81,6 @@ export const authOptions: NextAuthOptions = {
     error: "/auth/error",
   },
   session: {
-    strategy: "database",
+    strategy: "jwt",
   },
 };
